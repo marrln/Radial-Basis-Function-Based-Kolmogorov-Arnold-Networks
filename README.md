@@ -1,8 +1,9 @@
-# RBF-based KANs on Image Classification - Radial Basis Function-Based Kolmogorov-Arnold Networks on Image Classification
+# RBF-based KANs on Image Classification
+## Radial Basis Function-Based Kolmogorov-Arnold Networks on Image Classification
 
 This repository contains the implementation and exploration of **Kolmogorov-Arnold Networks (KANs)**, a neural network architecture inspired by the **Kolmogorov-Arnold representation theorem**. This theorem states that any multivariate continuous function can be represented as a finite superposition of univariate functions and a single two-variable function. 
 The Kolmogorov-Arnold Networks leverage this powerful mathematical framework to create efficient and interpretable machine learning models.
-For this specific implementation of the KANs we used Radial Basis Functions (RBF), hence RBF-based KANs, as learnable activations. In this particular repo we analyze the capabilities of RBF-based KANs on Image Classification.
+For this specific implementation of the KANs we used **Radial Basis Functions (RBF)**, hence RBF-based KANs, as learnable activations. In this particular repo we analyze the capabilities of RBF-based KANs on **Image Classification**.
 
 ---
 
