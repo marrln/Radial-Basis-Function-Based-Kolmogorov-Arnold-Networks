@@ -115,8 +115,7 @@ class FasterKAN(nn.Module):
         self.train_grid = True
         self.train_inv_denominator = True
 
-        # Support both int and list for num_grids
-        if not hasattr(num_grids, '__iter__') or isinstance(num_grids, int):
+        if not hasattr(num_grids, '__iter__'):
             num_grids = [num_grids for _ in layers_hidden[:-1]]
 
         if len(num_grids) < len(layers_hidden)-1:
