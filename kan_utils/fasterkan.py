@@ -1,22 +1,78 @@
+"""
+FasterKAN: Radial Basis Function-based Kolmogorov-Arnold Networks
+
+This module implements a version of RBF-KANs of Delis, called FasterKAN (Kolmogorov-Arnold Networks using 
+Radial Basis Functions) with modifications for better training and hardware implementation.
+
+Modifications compared to the original FasterKAN implementation:
+- Dropout with scaling based on the number of grids
+- Linear layers without bias for FPGA compatibility
+- Gradient scaling for grid and inverse denominator parameters
+
+Architecture:
+-------------
+FasterKAN consists of a sequence of layers, each containing:
+1. A Radial Spline Function (RSF) using tanh-based RBF
+2. A dropout layer with rate scaled based on grid count
+3. A linear layer (without bias)
+
+The RSF transformation computes:
+    f(x) = sech²(σ·(x-μᵢ)) = 1 - tanh²(σ·(x-μᵢ))
+where:
+    - μᵢ are the grid points
+    - σ is the inverse denominator (controlling basis function width)
+    - sech² is the squared hyperbolic secant
+
+Example Usage:
+-------------
+    model = FasterKAN(
+        layers_hidden=[784, 100, 10],  # Input, hidden, output dimensions
+        num_grids=10,                 # Grid points for RBFs
+        grid_min=-3.0,                # Minimum grid value
+        grid_max=3.0,                 # Maximum grid value
+        inv_denominator=1.0           # Inverse denominator (σ)
+    )
+    
+    # Forward pass
+    outputs = model(inputs)
+
+Components:
+-------------
+- RSWAFFunction: Autograd function for RBF computation
+- RSF: Radial Spline Function module used as a wrapper for the RSWAFFunction
+- FasterKANLayer: Single Layer combining RSF, dropout, and linear transformation
+- FasterKAN: Main model class, that can consists of many different FasterKANLayers
+"""
+
 import torch
 import torch.nn as nn
 from typing import *
 from torch.autograd import Function
 
-"""
-FasterKAN: Faster Radial Basis Function-based Kolmogorov-Arnold Networks (FasterKANs)
-Specific changes to the RBF KANs from Delis:
-- Use of Dropout in each layer to improve generalization, especially for larger number of grids (num_grids)
-- Use of nn.Linear without bias to be able to implement on FPGA
-- Backward pass is different, + we boost the gradients of grid and inv_denominator by 10 to make them more significant
-"""
-
 USE_BIAS_ON_LINEAR = False  # NOTE: Bias must be false to be able to implement on fpga
 
 class RSWAFFunction(Function):
+    """
+    Autograd function for Radial Spline Wavelet Activation Function.
+    
+    Computes the derivative of tanh((x-grid)*inv_denominator) with respect to x,
+    which is sech²((x-grid)*inv_denominator) = 1 - tanh²((x-grid)*inv_denominator).
+    
+    The backward pass:
+    1. Scales gradients for grid and inv_denominator parameters by 10
+    2. Allows selective training of grid and inv_denominator parameters
+    """
     @staticmethod
     def forward(ctx, input, grid, inv_denominator):
-
+        """
+        Args:
+            input (torch.Tensor): Input tensor [batch_size, input_dim]
+            grid (torch.Tensor): Grid points [num_grids]
+            inv_denominator (torch.Tensor): Inverse denominator
+            
+        Returns:
+            torch.Tensor: sech²((x-grid)*inv_denominator) values
+        """
         diff = (input[..., None] - grid)
         diff_mul = diff.mul(inv_denominator) 
         tanh_diff = torch.tanh(diff_mul)
@@ -28,7 +84,16 @@ class RSWAFFunction(Function):
     
     @staticmethod
     def backward(ctx, grad_output,train_grid: bool = True, train_inv_denominator: bool = True):
-
+        """
+        Args:
+            ctx: Context from forward pass
+            grad_output (torch.Tensor): Gradient from downstream layers
+            train_grid (bool): Whether to compute gradients for grid points
+            train_inv_denominator (bool): Whether to compute gradients for inv_denominator
+            
+        Returns:
+            tuple: Gradients for input, grid, and inv_denominator
+        """
         inv_denominator, diff_mul, tanh_diff, tanh_diff_deriviative = ctx.saved_tensors
         grad_grid = grad_inv_denominator = None
         
@@ -53,6 +118,19 @@ class RSWAFFunction(Function):
         return grad_input, grad_grid, grad_inv_denominator
 
 class RSF(nn.Module):
+    """
+    Args:
+        train_grid (bool): Whether to update grid points during training
+        train_inv_denominator (bool): Whether to update inv_denominator during training
+        grid_min (float): Minimum value for grid points
+        grid_max (float): Maximum value for grid points
+        num_grids (int): Number of grid points to use
+        inv_denominator (float): Initial value for inverse denominator parameter
+    
+    Attributes:
+        grid (nn.Parameter): Learnable grid points evenly spaced from grid_min to grid_max
+        inv_denominator (nn.Parameter): Learnable inverse denominator controlling RBF width
+    """
     def __init__(
         self,
         train_grid: bool,        
@@ -72,10 +150,40 @@ class RSF(nn.Module):
         self.inv_denominator = torch.nn.Parameter(torch.tensor(inv_denominator, dtype=torch.float32), requires_grad=train_inv_denominator)  # Cache the inverse of the denominator
 
     def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): Input tensor [batch_size, input_dim]
+            
+        Returns:
+            torch.Tensor: Transformed tensor [batch_size, input_dim, num_grids]
+        """
         return RSWAFFunction.apply(x, self.grid, self.inv_denominator) # returns tanh_diff_derivative
 
 
 class FasterKANLayer(nn.Module):
+    """
+    A single layer in the FasterKAN architecture.
+    
+    The layer applies the following sequence:
+    1. Transform inputs using Radial Spline Functions (RSF)
+    2. Apply dropout with rate based on grid count (1-0.75^num_grids)
+    3. Apply linear transformation to the outputs
+    
+    Args:
+        train_grid (bool): Whether to update grid points during training
+        train_inv_denominator (bool): Whether to update inv_denominator during training
+        input_dim (int): Dimensionality of input features
+        output_dim (int): Dimensionality of output features
+        grid_min (float): Minimum value for grid points
+        grid_max (float): Maximum value for grid points
+        num_grids (int): Number of grid points to use
+        inv_denominator (float): Initial value for inverse denominator parameter
+    
+    Attributes:
+        rbf (RSF): Radial Spline Function module
+        drop (nn.Dropout): Dropout layer with adaptive rate
+        linear (nn.Linear): Linear transformation without bias
+    """
     def __init__(
         self,
         train_grid: bool,        
@@ -94,6 +202,13 @@ class FasterKANLayer(nn.Module):
         self.drop = nn.Dropout(1-0.75**(num_grids)) # NOTE: Dropout rate increases with num_grids
 
     def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): Input tensor [batch_size, input_dim]
+            
+        Returns:
+            torch.Tensor: Output tensor [batch_size, output_dim]
+        """
         batch_size = x.size(0)
         x = x.view(batch_size, -1)
         spline_basis = self.rbf(x).view(batch_size, -1)
@@ -103,9 +218,34 @@ class FasterKANLayer(nn.Module):
 
 
 class FasterKAN(nn.Module):
+    """
+    FasterKAN: Radial Basis Function-based Kolmogorov-Arnold Network.
+    This model stacks multiple FasterKANLayers to create a deep RBF-KAN architecture.
+    
+    Args:
+        layers_hidden (List[int]): List of layer dimensions including input and output dimensions
+            e.g., [784, 100, 10] for MNIST classification with one hidden layer
+        num_grids (Union[int, List[int]]): Number of grid points for each layer
+            If a single int is provided, it's used for all layers
+        grid_min (float): Minimum value for grid points
+        grid_max (float): Maximum value for grid points
+        inv_denominator (float): Initial value for inverse denominator parameter
+    
+    Attributes:
+        train_grid (bool): Whether grid points are being updated during training
+        train_inv_denominator (bool): Whether inv_denominator is being updated during training
+        layers (nn.ModuleList): List of FasterKANLayer modules
+        is_eval (bool): Whether the model is in evaluation mode
+    
+    Example:
+        ```python
+        model = FasterKAN([784, 100, 10], num_grids=10, grid_min=-3.0, grid_max=3.0, inv_denominator=1.0)
+        output = model(input_tensor)  # Shape: [batch_size, 10]
+        ```
+    """
     def __init__(
-        self, layers_hidden, 
-        num_grids: int,
+        self, layers_hidden: List[int], 
+        num_grids: Union[int, List[int]],
         grid_min: float,
         grid_max: float,
         inv_denominator: float
@@ -137,18 +277,34 @@ class FasterKAN(nn.Module):
         ])
 
     def eval(self):
+        """
+        Set the model to evaluation mode, disabling grid and inv_denominator parameter updates.
+        """
         self.is_eval = True
         self.train_grid = False
         self.train_inv_denominator = False
         super().eval()
 
     def train(self, mode=True):
+        """
+        Set the model to training mode, enabling updates to grid and inv_denominator parameters.
+        
+        Args:
+            mode (bool): Whether to enable training mode (True) or evaluation mode (False)
+        """
         self.is_eval = not mode
         self.train_grid = mode
         self.train_inv_denominator = mode
         super().train(mode)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x (torch.Tensor): Input tensor [batch_size, input_dim]
+            
+        Returns:
+            torch.Tensor: Output tensor [batch_size, output_dim]
+        """
         for layer in self.layers:
             x = layer(x)
         return x
