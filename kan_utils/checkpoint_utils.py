@@ -1,29 +1,3 @@
-import os
-import json
-import torch
-import mapper 
-import pandas as pd
-import hashlib
-from torchinfo import summary
-from itertools import product
-from typing import Any, Dict, Optional
-
-from general_utils import load_json, get_model_macs_params
-
-REQUIRED_KEYS = [
-        "seed",
-        "criterion",
-        "optimizer",
-        "dim_list",
-        "grid_size_per_layer",
-        "grid_min",
-        "grid_max",
-        "inv_denominator",
-        "x_dim",
-        "y_dim",
-        "channel_size"
-    ]
-
 """
 This module provides utilities for managing model checkpoints and hyperparameter-based directory structures.
 
@@ -49,6 +23,32 @@ Example usage:
     save_model_checkpoint(epoch_dir, model, optimizer, epoch, loss)
     model, optimizer, start_epoch, loss, best_val_loss = load_model_checkpoint(model, device, model_path, optimizer_type, optimizer_params)
 """
+
+import os
+import json
+import torch
+import hashlib
+from typing import Any, Dict, Optional
+
+# Local imports
+from general_utils import load_json
+import mapper 
+
+# Settings
+REQUIRED_KEYS = [
+        "seed",
+        "criterion",
+        "optimizer",
+        "dim_list",
+        "grid_size_per_layer",
+        "grid_min",
+        "grid_max",
+        "inv_denominator",
+        "x_dim",
+        "y_dim",
+        "channel_size"
+    ]
+
 
 def read_config(config_path: str) -> Dict[str, Any]:
     """
