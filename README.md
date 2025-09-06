@@ -2,26 +2,28 @@
 
 This repository implements Radial Basis Function-Based Kolmogorov-Arnold Networks (RBF-KAN), a neural network architecture based on the Kolmogorov-Arnold representation theorem. The implementation (called FasterKAN) includes specific optimizations for both training and potential hardware acceleration.
 
-This implementation is based on the original [FasterKAN by Athanasios Delis](https://github.com/AthanasiosDelis/faster-kan) with several key modifications for improved performance and hardware deployability.
+This implementation is specialized for image classification tasks, with examples on handwritten digit recognition (MNIST) and medical image classification (HAM10000 skin lesions). It is based on the original [FasterKAN by Athanasios Delis](https://github.com/AthanasiosDelis/faster-kan) with several key modifications for improved performance and hardware deployability.
 
 ## Overview
 
 Kolmogorov-Arnold Networks (KANs) are neural networks inspired by the Kolmogorov-Arnold representation theorem, which states that any multivariate continuous function can be represented as a composition of continuous functions of a single variable and addition operations. RBF-KANs use radial basis functions as the inner univariate functions, providing a flexible framework for function approximation.
 
+While originally conceived for general function approximation, our implementation focuses specifically on image classification tasks. The architecture processes flattened image data and has been optimized for classification performance on image datasets.
+
 This implementation includes:
 - Core RBF-KAN architecture (implemented as FasterKAN)
 - Quantization support for deployment on resource-constrained devices
-- Example applications for MNIST and HAM10000 datasets
+- Example applications for MNIST digit classification and HAM10000 skin lesion classification
 
 ## Key Features
 
-- **RBF-based Architecture**: Uses radial basis functions in a KAN architecture
+- **RBF-based Architecture for Image Classification**: Uses radial basis functions in a KAN architecture specifically tuned for image classification tasks
 - **Training Optimizations**: 
   - Dropout scaled with grid size for better generalization
   - Gradient boosting for improved grid and denominator training
   - Configurable biases for FPGA-friendly implementation
 - **Quantization Support**: Tools for post-training quantization
-- **Example Applications**: Ready-to-use examples on standard datasets
+- **Image Classification Examples**: Ready-to-use examples on standard image datasets (MNIST, HAM10000)
 
 ## Differences from Original FasterKAN
 
@@ -60,10 +62,6 @@ Our implementation includes several key modifications to the original [FasterKAN
   - `fx_quant.ipynb`: PyTorch FX-based quantization examples and benchmarks
   - `validate_custom_quant.py`: Validation tools for assessing quantized model performance
 
-- **`oldconfigs/`**: Legacy configuration files and experimental code
-  - Various utilities and experimental implementations that informed the current design
-
-
 ### Training a KAN Model
 
 See the `MNIST/mnist_kan_training.ipynb` notebook for a complete training pipeline on the MNIST dataset.
@@ -95,6 +93,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## References
+
 Pending...
 
 ## Acknowledgments
