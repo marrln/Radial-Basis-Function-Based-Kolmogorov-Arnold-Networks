@@ -31,4 +31,4 @@ You will find scripts and notebooks here for:
 - Quantizing the KANs for deployment on resource-constrained devices
 
 ### Adjusting Model Hyperparameters
-You can easily adjust the model and training hyperparameters by editing the `hyperparams.json` file in this folder. This allows you to experiment with different architectures, learning rates, optimizers, and other settings without modifying the code.
+You can easily adjust the model and training hyperparameters by editing the `configs.json` file in this folder. This allows you to experiment with different architectures, learning rates, optimizers, and other settings without modifying the code.
