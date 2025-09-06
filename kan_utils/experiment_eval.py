@@ -1,11 +1,45 @@
-from itertools import product
+"""
+Experiment Evaluation Utilities for RBF-based Kolmogorov-Arnold Networks (KANs)
+
+This module provides tools for evaluating and comparing RBF-KAN experiments, including:
+1. Model attribute recording and summarization
+2. Extraction of training/validation metrics across experiments
+3. Collection and aggregation of hyperparameters from multiple experiment runs
+4. Data processing for comparative analysis of different model configurations
+
+Key Features:
+- Save detailed model attributes including architecture, parameters count, and MACs
+- Extract and collect unique hyperparameter values across multiple experiments
+- Process and consolidate training metrics from multiple experiment directories
+- Export aggregated data to Excel for further analysis and visualization
+
+Example Usage:
+    # Save model attributes to a checkpoint directory
+    checkpoint_path = save_attributes(
+        model=model,
+        root_dir="experiments",
+        config=config_dict
+    )
+    
+    # Collect unique hyperparameter values from all experiments
+    unique_params = collect_unique_hyperparams_from_dirs("experiments")
+    
+    # Process all experiment data and export to Excel
+    process_model_data("experiments", config_dict)
+
+This module works in conjunction with the checkpoint_utils and general_utils modules
+to provide a comprehensive experiment management and evaluation framework for RBF-KANs.
+"""
+
 import os
 import json
-from torchsummary import summary
-import torch
-from typing import Dict
 import pandas as pd
+import torch
+from itertools import product
+from torchsummary import summary
+from typing import Dict
 
+# Local imports
 import general_utils as utils
 import checkpoint_utils as checkpoint
 
