@@ -5,63 +5,45 @@ from tqdm.notebook import tqdm
 from sklearn.metrics import f1_score, confusion_matrix, recall_score
 import mapper
 import fasterkan
-import checkpoint
+import checkpoint_utils as checkpoint
 import json
 
 
 SAVE_METRICS_IN_TXT = True
+CHECKPOINT_DIRECTORY = "Training Checkpoints"
 
-def initialize_kan_model(
-    root_dir: str,
-    hyperparams: dict,
-    x_dim: int,
-    y_dim: int,
-    channel_size: int,
-    hyperparams_typedict: dict,
-    device: str
-) -> tuple[torch.nn.Module, str]:
+
+def initialize_kan_model_from_config(config_path: str, device: str = 'cpu') -> tuple[torch.nn.Module, str]:
     """
-    Initialize the FasterKAN model with specified parameters.
-
+    Initialize the FasterKAN model using a configuration dictionary or a config file path.
     Args:
-        root_dir (str): The root directory where model checkpoint folders are located.
-        hyperparams (dict): Dictionary containing all model and training hyperparameters.
-        x_dim (int): Width of the input data.
-        y_dim (int): Height of the input data.
-        channel_size (int): Number of channels in the input data.
-        hyperparams_typedict (dict): Dictionary mapping hyperparameter names to types.
-        device (str): Device to use for the model ('cpu' or 'cuda').
+        config (dict or str): Configuration dictionary with hyperparams, or path to config.json file.
+        device (str): Device to use for the model ('cpu' or 'cuda'). Defaults to 'cpu'.
 
     Returns:
         model (torch.nn.Module): Initialized FasterKAN model.
         file_path (str): Path to the saved model attributes.
     """
-    model = fasterkan.FasterKAN(
-        layers_hidden=hyperparams['dim_list'],
-        num_grids=hyperparams['grid_size_per_layer'],
-        grid_min=hyperparams['grid_min'],
-        grid_max=hyperparams['grid_max'],
-        inv_denominator=hyperparams['inv_denominator']
-    ).to(device)
     
+    config = checkpoint.read_config(config_path)    
+
+    model = fasterkan.FasterKAN(
+        layers_hidden=config['dim_list'],
+        num_grids=config['grid_size_per_layer'],
+        grid_min=config['grid_min'],
+        grid_max=config['grid_max'],
+        inv_denominator=config['inv_denominator']
+    ).to(device)
+
     file_path = checkpoint.save_attributes(
-        model,
-        root_dir=root_dir,
-        hyperparams=hyperparams,
-        hyperparams_typedict=hyperparams_typedict,
-        x_dim=x_dim,
-        y_dim=y_dim,
-        channel_size=channel_size
+        model=model,
+        root_dir=CHECKPOINT_DIRECTORY,
+        config=config
     )
     return model, file_path
 
-def update_logs(
-    log_file: str,
-    epoch: int,
-    training_metric: float,
-    validation_metric: float,
-    metric_name: str
-) -> None:
+
+def update_logs(log_file: str, epoch: int, training_metric: float, validation_metric: float, metric_name: str) -> None:
     """
     Update log files for training and validation metrics in JSON format.
 
