@@ -25,11 +25,14 @@ Notes:
 2. Call `accuracy_plotter(dir_path)` or `loss_plotter(dir_path)` with the directory path containing the logs and configuration.
 3. The plots will be saved as 'accuracy_plot.jpg' and 'loss_plot.jpg' in the same directory and displayed interactively.
 
+TODO: If the hyperparameters are too many, the figtext may overflow outside the figure. Implement a better way to handle this.
 """
 
 import os
 import json
 import matplotlib.pyplot as plt
+
+# Local imports
 import checkpoint_utils as checkpoint
 
 # GLOBAL CONSTANTS FOR AESTHETICS

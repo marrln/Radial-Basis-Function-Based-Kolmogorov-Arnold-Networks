@@ -38,7 +38,7 @@ def save_attributes(
     y_dim = config.get('y_dim')
     channel_size = config.get('channel_size')
 
-    macs, total_params, trainable_params = utils.get_model_macs_params(model, x_dim, y_dim, channel_size)
+    macs, total_params, trainable_params = utils.get_model_macs_params(model, config)
 
     checkpoint_path = checkpoint.get_checkpoint_dir(config, root_dir)
     os.makedirs(checkpoint_path, exist_ok=True)

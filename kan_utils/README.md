@@ -1,17 +1,17 @@
-# KAN Utilities
+# KAN Utilities for Image Classification
 
 This folder contains the core implementation and utility modules for Radial Basis Function-Based Kolmogorov-Arnold Networks (RBF-KANs), specialized for image classification tasks.
 
 ## Core Components
 
 - **fasterkan.py**  
-  Implementation of the RBF-KAN architecture (FasterKAN) with optimizations for image classification tasks. Features include dropout with grid size-dependent rates, gradient boosting, and options for FPGA-friendly implementation.
+  Implementation of the RBF-KAN architecture (FasterKAN) optimized for image classification. Features include adaptive dropout rates based on grid size, FPGA-friendly linear layers without bias terms, and modified backward pass with gradient boosting for grid and inverse denominator parameters.
 
 - **training.py**  
-  Comprehensive training pipeline for image classification, including model initialization from config files, metric calculation, validation routines, and checkpoint integration.
+  End-to-end training pipeline with model initialization, training loops, validation, early stopping, checkpoint integration, and comprehensive metrics computation for image classification tasks.
 
 - **checkpoint_utils.py**  
-  Utilities for managing model checkpoints, creating structured directories based on hyperparameters, saving/loading model states, and preserving configurations across training sessions.
+  Robust checkpoint management system that handles model serialization, hyperparameter-based directory structures, config validation, and model state loading/saving with proper device mapping.
 
 - **experiment_eval.py**  
   Tools for evaluating image classification experiments, analyzing hyperparameter impact, and collecting performance metrics across multiple training runs.
@@ -27,13 +27,32 @@ This folder contains the core implementation and utility modules for Radial Basi
 
 ## Usage for Image Classification
 
-The utilities in this folder are designed specifically for training and evaluating image classification models using the RBF-KAN architecture. The implementation has been tested on:
+The utilities in this folder are specifically designed for training and evaluating image classification models using the RBF-KAN architecture. The workflow typically includes:
 
-1. **MNIST** (handwritten digit classification)
-2. **HAM10000** (skin lesion classification)
+1. **Configuration**: Create a JSON config file with model hyperparameters
+2. **Model Initialization**: Use `initialize_kan_model_from_config()` to create a model
+3. **Training**: Run `train_and_validate_model()` with appropriate data loaders
+4. **Evaluation**: Analyze results with `validate_model()` and visualization tools
 
-For examples of how to use these utilities in image classification tasks, see the notebooks in the `MNIST/` and `HAM10000/` directories.
+The implementation has been optimized and tested on image classification datasets:
 
-## Quantization Integration
+- **MNIST**: Handwritten digit classification (grayscale images)
+- **HAM10000**: Skin lesion classification (dermatoscopic images)
 
-The training and checkpoint utilities in this folder integrate seamlessly with the quantization tools in the `quantization/` directory, enabling post-training quantization for deployment on resource-constrained devices.
+## Integration with Quantization
+
+The architecture supports post-training quantization through the tools in the `quantization/` directory. The checkpoint system is designed to preserve model states in a format compatible with the quantization workflow.
+
+## Key Features for Image Classification
+
+1. **Grid-Based RBF Implementation**: Uses radial basis functions with learned grid points and inverse denominators
+2. **Adaptive Dropout**: Dropout rate that scales with grid size to prevent overfitting in larger models
+3. **FPGA-Friendly Design**: Option to disable bias terms for hardware implementation
+4. **Gradient Boosting**: Enhanced backward pass that prioritizes grid and inverse denominator parameter updates
+5. **Comprehensive Metrics**: F1 score, recall, confusion matrix, and accuracy for thorough model evaluation
+
+## Implementation Notes
+
+- The `USE_BIAS_ON_LINEAR` flag in `fasterkan.py` controls whether linear layers use bias terms
+- Dropout rate formula: `1-0.75**(num_grids)` ensures appropriate regularization as model complexity increases
+- Gradient boosting factor of 10x for grid and inverse denominator parameters helps balance learning rates
