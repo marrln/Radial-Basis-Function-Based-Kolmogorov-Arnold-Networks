@@ -3,6 +3,16 @@ import torch.nn as nn
 from typing import *
 from torch.autograd import Function
 
+"""
+FasterKAN: Faster Radial Basis Function-based Kolmogorov-Arnold Networks (FasterKANs)
+Specific changes to the RBF KANs from Delis:
+- Use of Dropout in each layer to improve generalization, especially for larger number of grids (num_grids)
+- Use of nn.Linear without bias to be able to implement on FPGA
+- Backward pass is different, + we boost the gradients of grid and inv_denominator by 10 to make them more significant
+"""
+
+USE_BIAS_ON_LINEAR = False  # NOTE: Bias must be false to be able to implement on fpga
+
 class RSWAFFunction(Function):
     @staticmethod
     def forward(ctx, input, grid, inv_denominator):
@@ -80,8 +90,8 @@ class FasterKANLayer(nn.Module):
         super(FasterKANLayer,self).__init__()
 
         self.rbf = RSF(train_grid, train_inv_denominator,grid_min, grid_max, num_grids, inv_denominator)
-        self.linear = nn.Linear(input_dim * num_grids, output_dim, bias=False) # NOTE: Bias must be false to be able to implement on fpga
-        self.drop = nn.Dropout(1-0.75**(num_grids))
+        self.linear = nn.Linear(input_dim * num_grids, output_dim, bias=USE_BIAS_ON_LINEAR) 
+        self.drop = nn.Dropout(1-0.75**(num_grids)) # NOTE: Dropout rate increases with num_grids
 
     def forward(self, x):
         batch_size = x.size(0)
@@ -104,14 +114,15 @@ class FasterKAN(nn.Module):
 
         self.train_grid = True
         self.train_inv_denominator = True
-        
-        if not hasattr(num_grids, '__iter__'):
+
+        # Support both int and list for num_grids
+        if not hasattr(num_grids, '__iter__') or isinstance(num_grids, int):
             num_grids = [num_grids for _ in layers_hidden[:-1]]
-            
+
         if len(num_grids) < len(layers_hidden)-1:
             num_grids = num_grids + [num_grids[-1] for _ in range(len(layers_hidden)-1-len(num_grids))]
-        
-        assert len(num_grids) == len(layers_hidden) -1
+
+        assert len(num_grids) == len(layers_hidden) - 1
 
         self.layers = nn.ModuleList([
             FasterKANLayer(
