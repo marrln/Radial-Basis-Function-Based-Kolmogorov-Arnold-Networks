@@ -1,52 +1,103 @@
-# RBF-based KANs on Image Classification
-## Radial Basis Function-Based Kolmogorov-Arnold Networks on Image Classification
+# Radial Basis Function-Based Kolmogorov-Arnold Networks (RBF-KAN)
 
-This repository contains the implementation and exploration of **Kolmogorov-Arnold Networks (KANs)**, a neural network architecture inspired by the **Kolmogorov-Arnold representation theorem**. This theorem states that any multivariate continuous function can be represented as a finite superposition of univariate functions and a single two-variable function. 
-The Kolmogorov-Arnold Networks leverage this powerful mathematical framework to create efficient and interpretable machine learning models.
-For this specific implementation of the KANs we used **Radial Basis Functions (RBF)**, hence RBF-based KANs, as learnable activations. In this particular repo we analyze the capabilities of RBF-based KANs on **Image Classification**.
+This repository implements Radial Basis Function-Based Kolmogorov-Arnold Networks (RBF-KAN), a neural network architecture based on the Kolmogorov-Arnold representation theorem. The implementation (called FasterKAN) includes specific optimizations for both training and potential hardware acceleration.
 
----
+This implementation is based on the original [FasterKAN by Athanasios Delis](https://github.com/AthanasiosDelis/faster-kan) with several key modifications for improved performance and hardware deployability.
 
-### Prerequisites
-To use this repository, ensure you have the following installed:
-- Python 3.9.13
-- Required libraries listed in `requirements.txt`
+## Overview
 
-Install dependencies by running:
-```bash
-pip install -r requirements.txt
-```
+Kolmogorov-Arnold Networks (KANs) are neural networks inspired by the Kolmogorov-Arnold representation theorem, which states that any multivariate continuous function can be represented as a composition of continuous functions of a single variable and addition operations. RBF-KANs use radial basis functions as the inner univariate functions, providing a flexible framework for function approximation.
 
-## Project Structure
-```
-kolmogorov-arnold-networks/
-├── data/                  # Datasets for training and testing
-├── configs/               # Configuration files
-├── models/                # Neural network models
-├── utils/                 # Utility scripts
-├── train.py               # Training script
-├── visualize.py           # Visualization script
-├── requirements.txt       # Python dependencies
-└── README.md              # Project documentation
-```
+This implementation includes:
+- Core RBF-KAN architecture (implemented as FasterKAN)
+- Quantization support for deployment on resource-constrained devices
+- Example applications for MNIST and HAM10000 datasets
 
----
+## Key Features
+
+- **RBF-based Architecture**: Uses radial basis functions in a KAN architecture
+- **Training Optimizations**: 
+  - Dropout scaled with grid size for better generalization
+  - Gradient boosting for improved grid and denominator training
+  - Configurable biases for FPGA-friendly implementation
+- **Quantization Support**: Tools for post-training quantization
+- **Example Applications**: Ready-to-use examples on standard datasets
+
+## Differences from Original FasterKAN
+
+Our implementation includes several key modifications to the original [FasterKAN](https://github.com/AthanasiosDelis/faster-kan):
+
+1. **Dropout Implementation**: Added dropout layers with rates that scale with the number of grid points to improve generalization, especially for models with larger grid sizes.
+   
+2. **Hardware-Friendly Architecture**: Implemented an option to use linear layers without bias terms, making the model more suitable for FPGA implementation.
+
+3. **Modified Backward Pass**: Enhanced the backward pass with gradient boosting for grid and inverse denominator parameters, making their updates more significant during training.
+
+4. **Quantization Support**: Added comprehensive tools for model quantization to support deployment on resource-constrained devices.
+
+## Repository Structure
+
+- **`kan_utils/`**: Core implementation of KAN architectures and utilities
+  - `fasterkan.py`: RBF-KAN implementation (FasterKAN) with dropout and gradient boosting optimizations
+  - `mapper.py`: Utility for mapping string identifiers to PyTorch optimizer, scheduler, and loss function classes
+  - `training.py`: Comprehensive training pipeline with initialization, logging, and metrics computation
+  - `checkpoint_utils.py`: Functions for model checkpointing, config management, and model serialization
+  - `experiment_eval.py`: Tools for experiment analysis and hyperparameter management
+  - `plotter.py`: Visualization utilities for training metrics and model evaluation
+  - `general_utils.py`: Common utility functions shared across the codebase
+
+- **`MNIST/`**: MNIST dataset experiments
+  - `mnist_kan_training.ipynb`: Complete training pipeline notebook for MNIST classification
+  - `mnist_kan_quant.ipynb`: Model quantization experiments with performance benchmarks
+
+- **`HAM1000/`**: Skin cancer classification using HAM10000 dataset
+  - `SkinCancerDataset.py`: Custom dataset implementation for dermoscopic images
+  - `config.json`: Configuration parameters for HAM10000 experiments
+  - `readme.md`: Detailed information about the HAM10000 dataset and its use with KANs
+
+- **`quantization/`**: Specialized quantization tools and examples
+  - `custom_quant_fasterkan.py`: Fixed-point quantization implementation for FasterKAN models
+  - `fx_quant.ipynb`: PyTorch FX-based quantization examples and benchmarks
+  - `validate_custom_quant.py`: Validation tools for assessing quantized model performance
+
+- **`oldconfigs/`**: Legacy configuration files and experimental code
+  - Various utilities and experimental implementations that informed the current design
+
+
+### Training a KAN Model
+
+See the `MNIST/mnist_kan_training.ipynb` notebook for a complete training pipeline on the MNIST dataset.
+
+### Quantizing a KAN Model
+
+See the `quantization/fx_quant.ipynb` notebook for quantization examples.
+
+## HAM10000 Dataset
+
+This repository includes code for applying KANs to the HAM10000 dataset, a collection of dermoscopic images for skin cancer classification. The dataset contains 10,015 images across seven categories of skin lesions. 
+For more details, see the `HAM10000/README.md` file.
+
+## Differences from Traditional Neural Networks
+
+RBF-KANs differ from traditional neural networks in several ways:
+1. Based on the Kolmogorov-Arnold representation theorem
+2. Use radial basis functions instead of typical activation functions
+3. Specific architecture with grid-based operations
+4. Optimized for function approximation
+5. Despite lacking spacial locality (like CNNs), they can still effectively process image data
+
 ## Contributing
-Contributions are welcome! To contribute:
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature-branch`)
-3. Commit your changes (`git commit -am 'Add new feature'`)
-4. Push to the branch (`git push origin feature-branch`)
-5. Open a Pull Request
----
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
+This project is licensed under the MIT License - see the LICENSE file for details.
+
 ## References
-Pending ...
+Pending...
 
----
 ## Acknowledgments
-Pending ...
+
+- The theoretical foundations of the Kolmogorov-Arnold representation theorem
+- The HAM10000 dataset by Tschandl et al.
