@@ -55,7 +55,9 @@ Our implementation includes several key modifications to the original [FasterKAN
 - **`HAM1000/`**: Skin cancer classification using HAM10000 dataset
   - `SkinCancerDataset.py`: Custom dataset implementation for dermoscopic images
   - `config.json`: Configuration parameters for HAM10000 experiments
-  - `readme.md`: Detailed information about the HAM10000 dataset and its use with KANs
+  - `HAM1000_kan_training.ipynb`: Complete training pipeline notebook for HAM1000 classification
+  - `HAM1000_kan_quant.ipynb`: Model quantization experiments with performance benchmarks
+  - `README.md`: Detailed information about the HAM10000 dataset and its use with KANs
 
 - **`quantization/`**: Specialized quantization tools and examples
   - `custom_quant_fasterkan.py`: Fixed-point quantization implementation for FasterKAN models
@@ -65,10 +67,14 @@ Our implementation includes several key modifications to the original [FasterKAN
 ### Training a KAN Model
 
 See the `MNIST/mnist_kan_training.ipynb` notebook for a complete training pipeline on the MNIST dataset.
+See the `HAM10000/HAM10000_kan_training.ipynb` notebook for a complete training pipeline on the HAM10000 dataset.
+
 
 ### Quantizing a KAN Model
 
-See the `quantization/fx_quant.ipynb` notebook for quantization examples.
+See the 'MNIST/mnist_kan_quant.ipynb' notebook for quantization examples on MNIST.
+See the 'HAM10000/HAM10000_kan_quant.ipynb' notebook for quantization examples on HAM10000.
+
 
 ## HAM10000 Dataset
 
