@@ -1,28 +1,84 @@
-import torch
+"""
+Image Classification Training Pipeline for RBF-based Kolmogorov-Arnold Networks (KANs)
+
+This module provides a comprehensive training pipeline for image classification tasks
+using Radial Basis Function (RBF) based Kolmogorov-Arnold Networks. It includes functions
+for model initialization, training, validation, checkpointing, and performance metrics computation.
+
+The module is designed to work with the FasterKAN implementation, which is an optimized version
+of RBF-KANs with features like dropout scaling and gradient boosting.
+
+Key Features:
+- Model initialization from configuration files
+- End-to-end training with validation
+- Checkpointing and model serialization
+- Training/validation metrics logging and visualization
+- Detailed performance metrics computation (accuracy, F1 score, recall, confusion matrix)
+- Support for early stopping and learning rate scheduling
+
+Example Usage:
+    # Initialize model from config
+    model, attr_path = initialize_kan_model_from_config('config.json', device='cuda')
+    
+    # Train and validate the model
+    train_and_validate_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        criterion='CrossEntropyLoss',
+        optimizer='Adam',
+        scheduler='ReduceLROnPlateau',
+        device='cuda',
+        checkpoint_dir='checkpoints',
+        epochs=50,
+        patience=10
+    )
+    
+    # Validate a trained model
+    val_loss, val_accuracy = validate_model(
+        model=model,
+        val_loader=val_loader,
+        criterion=criterion,
+        checkpoint_path='checkpoints/best/model_checkpoint.pth',
+        device='cuda',
+        metrics_flag=True
+    )
+"""
+
 import os
 import re
-from tqdm.notebook import tqdm 
-from sklearn.metrics import f1_score, confusion_matrix, recall_score
-import mapper
-import fasterkan
-import checkpoint_utils as checkpoint
 import json
+import torch
+from tqdm.notebook import tqdm
+from sklearn.metrics import confusion_matrix, f1_score, recall_score
+from typing import Dict, List, Tuple, Union, Optional, Any
 
+# Local imports
+import checkpoint_utils as checkpoint
+import fasterkan
+import mapper
 
+# Settings
 SAVE_METRICS_IN_TXT = True
 CHECKPOINT_DIRECTORY = "Training Checkpoints"
 
 
 def initialize_kan_model_from_config(config_path: str, device: str = 'cpu') -> tuple[torch.nn.Module, str]:
     """
-    Initialize the FasterKAN model using a configuration dictionary or a config file path.
+    Initialize the FasterKAN model using a configuration file path.
+    
     Args:
-        config (dict or str): Configuration dictionary with hyperparams, or path to config.json file.
+        config_path (str): Path to the config.json file containing model hyperparameters.
         device (str): Device to use for the model ('cpu' or 'cuda'). Defaults to 'cpu'.
 
     Returns:
-        model (torch.nn.Module): Initialized FasterKAN model.
-        file_path (str): Path to the saved model attributes.
+        tuple[torch.nn.Module, str]: 
+            - model: Initialized FasterKAN model.
+            - file_path: Path to the saved model attributes file.
+    
+    Raises:
+        KeyError: If required configuration keys are missing.
+        ValueError: If model dimensions are inconsistent.
     """
     
     config = checkpoint.read_config(config_path)    
@@ -49,10 +105,17 @@ def update_logs(log_file: str, epoch: int, training_metric: float, validation_me
 
     Args:
         log_file (str): Path to the log file.
-        epoch (int): Current epoch.
+        epoch (int): Current epoch number.
         training_metric (float): Metric value for training (e.g., loss or accuracy).
         validation_metric (float): Metric value for validation (e.g., loss or accuracy).
         metric_name (str): Name of the metric (e.g., "Loss", "Accuracy").
+    
+    Returns:
+        None
+    
+    Note:
+        If the log file already exists, it will be updated. If an entry for the current epoch
+        and metric already exists, it will be replaced with the new values.
     """
     # Load existing logs if file exists
     if os.path.exists(log_file):
@@ -82,27 +145,28 @@ def compute_and_serialize_metrics(
     all_targets: torch.Tensor,
     all_preds: torch.Tensor,
     val_accuracy: float,
-    checkpoint_path: str = None,
+    checkpoint_path: Optional[str] = None,
     save_txt: bool = SAVE_METRICS_IN_TXT
-) -> dict:
+) -> Dict[str, Any]:
     """
-    Compute F1, recall, confusion matrix, and accuracy, print them, and save to JSON (and optionally TXT) files.
+    Compute F1, recall, confusion matrix, and accuracy, print them, and save to JSON and optionally TXT files.
 
     Args:
-        all_targets (Tensor or array-like): True labels.
-        all_preds (Tensor or array-like): Predicted labels.
-        val_accuracy (float): Validation accuracy (percentage).
-        checkpoint_path (str, optional): Path to checkpoint for directory context. Defaults to None.
-        save_txt (bool, optional): Whether to also save metrics as TXT. Defaults to True.
+        all_targets (torch.Tensor): True labels tensor.
+        all_preds (torch.Tensor): Predicted labels tensor.
+        val_accuracy (float): Validation accuracy as a percentage.
+        checkpoint_path (Optional[str]): Path to checkpoint for directory context. Defaults to None.
+        save_txt (bool): Whether to also save metrics as TXT. Defaults to SAVE_METRICS_IN_TXT.
 
     Returns:
-        dict: Dictionary containing computed metrics.
+        Dict[str, Any]: Dictionary containing computed metrics (f1_score, recall, accuracy, confusion_matrix).
+    
+    Notes:
+        - For multi-class classification, 'weighted' averages metrics by support 
+          (number of true instances for each label).
+        - 'macro' would give equal weight to each class regardless of support.
+        - We use 'weighted' for imbalanced classes to reflect the class distribution.
     """
-
-    # NOTE: For multi-class classification, 'weighted' averages by support (number of true instances for each label),
-    # while 'macro' gives equal weight to each class regardless of support.
-    # Use 'weighted' if your classes are imbalanced and you want the metric to reflect the class distribution.
-    # Use 'macro' if you want to treat all classes equally, regardless of their frequency.
 
     f1 = f1_score(all_targets, all_preds, average='weighted')
     recall = recall_score(all_targets, all_preds, average='weighted')
@@ -140,25 +204,65 @@ def compute_and_serialize_metrics(
     return metrics
 
 
-def validate_model(model, val_loader, criterion, checkpoint_path=None, optimizer=None, device='cpu', metrics_flag=False):
+def validate_model(
+    model: torch.nn.Module, 
+    val_loader: torch.utils.data.DataLoader, 
+    criterion: Union[torch.nn.Module, str],
+    checkpoint_path: Optional[str] = None, 
+    optimizer: Optional[torch.optim.Optimizer] = None, 
+    device: str = 'cpu', 
+    metrics_flag: bool = False
+) -> Tuple[Optional[float], Optional[float]]:
     """
     Validate a model on a given validation dataset.
 
     Args:
         model (torch.nn.Module): The model to validate.
         val_loader (torch.utils.data.DataLoader): DataLoader for the validation dataset.
-        criterion (torch.nn.Module): The loss function to evaluate the model.
-        checkpoint_path (str, optional): Path to a checkpoint file to load the model (and optionally optimizer) state. Defaults to None.
-        optimizer (torch.optim.Optimizer, optional): Optimizer to load the state into if checkpoint_path is provided. Defaults to None.
+        criterion (Union[torch.nn.Module, str]): The loss function to evaluate the model. Can be a string or torch.nn.Module.
+        checkpoint_path (Optional[str]): Path to a checkpoint file to load the model state. Defaults to None.
+        optimizer (Optional[torch.optim.Optimizer]): Optimizer to load the state into if checkpoint_path is provided. Defaults to None.
         device (str): The device to use ('cpu' or 'cuda'). Defaults to 'cpu'.
-        metrics_flag (bool): Flag to compute additional metrics during validation. Defaults to False.
+        metrics_flag (bool): Flag to compute and save additional metrics during validation. Defaults to False.
 
     Returns:
-        tuple: Validation loss and validation accuracy.
+        Tuple[Optional[float], Optional[float]]: Tuple containing:
+            - val_loss: Validation loss value, or None if loading checkpoint failed.
+            - val_accuracy: Validation accuracy percentage, or None if loading checkpoint failed.
+    
+    Notes:
+        - If checkpoint_path is provided, the model (and optimizer if provided) will be loaded from that checkpoint.
+        - If optimizer is provided with checkpoint_path, the function will attempt to map the optimizer 
+          class to a known optimizer type from the mapper module.
+        - For string criterion, it strips any parameters in parentheses and uses the mapper to get the criterion.
     """
     if checkpoint_path:
         try:
-            model, optimizer, _, _, _ = checkpoint.load_checkpoint(model, optimizer, checkpoint_path, device) 
+            # If optimizer is provided, extract its type and parameters
+            optimizer_type = None
+            optimizer_params = {}
+            if optimizer is not None:
+                # Map the optimizer class to its name in the OPTIMIZERS dictionary
+                for name, opt_class in mapper.OPTIMIZERS.items():
+                    if isinstance(optimizer, opt_class):
+                        optimizer_type = name
+                        break
+                
+                if optimizer_type is None:
+                    # Fallback to class name if not found in mapper
+                    optimizer_type = optimizer.__class__.__name__
+                    print(f"Warning: Optimizer class {optimizer_type} not found in mapper, using class name directly.")
+                
+                # Get optimizer parameters from its defaults
+                optimizer_params = optimizer.defaults
+                
+            model, optimizer, _, _, _ = checkpoint.load_model_checkpoint(
+                model, 
+                device, 
+                checkpoint_path, 
+                optimizer_type, 
+                optimizer_params
+            )
             print(f"Model loaded from checkpoint: {checkpoint_path}")
         except FileNotFoundError as e:
             print(e)
@@ -201,19 +305,18 @@ def validate_model(model, val_loader, criterion, checkpoint_path=None, optimizer
 
 
 def train_and_validate_model(
-    model, 
-    train_loader, 
-    val_loader, 
-    criterion, 
-    optimizer, 
-    scheduler,
-    device, 
-    checkpoint_dir, 
+    model: torch.nn.Module, 
+    train_loader: torch.utils.data.DataLoader, 
+    val_loader: torch.utils.data.DataLoader, 
+    criterion: Union[str, torch.nn.Module], 
+    optimizer: Union[str, torch.optim.Optimizer], 
+    scheduler: Union[str, torch.optim.lr_scheduler._LRScheduler, None],
+    device: str, 
+    checkpoint_dir: str, 
     epochs: int = 30, 
     start_epoch: int = 0, 
-    patience: int = None,
-    # debug_flag: bool = False
-):
+    patience: Optional[int] = None
+) -> None:
     """
     Train and validate a PyTorch model for a specified number of epochs, saving checkpoints and logs.
 
@@ -221,14 +324,27 @@ def train_and_validate_model(
         model (torch.nn.Module): The model to train and validate.
         train_loader (torch.utils.data.DataLoader): DataLoader for the training dataset.
         val_loader (torch.utils.data.DataLoader): DataLoader for the validation dataset.
-        criterion (str or torch.nn.Module): The loss function for training. Can be a string or an instance of nn.Module.
-        optimizer (str or torch.optim.Optimizer): The optimizer for training. Can be a string or an instance of torch.optim.Optimizer.
-        scheduler (str or torch.optim.lr_scheduler.LRScheduler) : The scheduler for training. Can be a string or an instance of torch.optim.lr_scheduler.LRScheduler.
+        criterion (Union[str, torch.nn.Module]): The loss function for training. Can be a string or an instance of nn.Module.
+        optimizer (Union[str, torch.optim.Optimizer]): The optimizer for training. Can be a string or an instance of Optimizer.
+        scheduler (Union[str, torch.optim.lr_scheduler._LRScheduler, None]): The scheduler for training. 
+            Can be a string, an instance of LRScheduler, or None.
         device (str): Device to use for training ('cpu' or 'cuda').
         checkpoint_dir (str): Directory to save checkpoints and logs.
-        epochs (int, optional): Total number of epochs to train. Defaults to 30.
-        start_epoch (int, optional): Starting epoch (useful for resuming training). Defaults to 0.
-        # debug_flag (bool, optional): Flag for debugging gradients. Defaults to False.
+        epochs (int): Total number of epochs to train. Defaults to 30.
+        start_epoch (int): Starting epoch (useful for resuming training). Defaults to 0.
+        patience (Optional[int]): Number of epochs with no improvement after which training will be stopped.
+            Defaults to None (no early stopping).
+
+    Returns:
+        None
+    
+    Notes:
+        - If criterion, optimizer, or scheduler are provided as strings, they will be converted to 
+          their respective objects using the mapper module.
+        - The function creates 'best' and 'last' checkpoint directories and saves model states after each epoch.
+        - When early stopping is enabled (patience is not None), training will stop if validation loss
+          does not improve for the specified number of epochs.
+        - Training and validation metrics are logged to JSON files for later visualization.
     """
     # Convert criterion from string to nn.Module if needed
     if isinstance(criterion, str):
@@ -275,12 +391,6 @@ def train_and_validate_model(
 
                 loss.backward()
                 optimizer.step()
-
-                # if debug_flag and batch_idx % 500 == 0:
-                #     print(f"Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(train_loader)}]")
-                #     for param in model.parameters():
-                #         if param.grad is not None:
-                #             print(f"Gradients of {param.shape}: {param.grad.mean()}")
 
                 # Accumulate loss and accuracy
                 running_loss += loss.item() * data.size(0)
