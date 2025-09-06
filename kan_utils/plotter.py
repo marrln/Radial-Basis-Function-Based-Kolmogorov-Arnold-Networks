@@ -30,7 +30,7 @@ Notes:
 import os
 import json
 import matplotlib.pyplot as plt
-import checkpoint
+import checkpoint_utils as checkpoint
 
 # GLOBAL CONSTANTS FOR AESTHETICS
 MARKER_SIZE, MARKER_TYPE = 3, 'o'                                                                      # Marker size and type for accuracy/loss curves
@@ -75,24 +75,29 @@ def extract_log_data(file_path: str, keys: list[str]) -> dict[str, list]:
     return result
 
 
-def accuracy_plotter(dir_path: str, hyperparams_typedict: dict, show_hyperparams: bool = True) -> None:
+def accuracy_plotter(dir_path: str, config_path: str = None, show_hyperparams: bool = True) -> None:
     """
     Plots training and validation accuracy from a JSON log file.
     If test accuracy is present, plots it as well. If only one test accuracy is present (best model), shows it as a horizontal line.
 
     Args:
-        dir_path (str): Path to the directory containing the JSON log and model config.
-        hyperparams_typedict (dict): Dictionary mapping hyperparameter names to types. Must be provided by the user.
+        dir_path (str): Path to the directory containing the JSON log files.
+        config_path (str, optional): Path to the config file. If None, will look for config.json in dir_path.
         show_hyperparams (bool): If True, displays model hyperparameters as figtext on the plot.
 
     Saves:
         A plot 'accuracy_plot.jpg' in the same directory.
     """
     try:
-        hyperparams = checkpoint.deconstruct_dir_to_hyperparams(dir_path, hyperparams_typedict)
+        # If config_path is not provided, look for config.json in dir_path
+        if config_path is None:
+            config_path = os.path.join(dir_path, 'config.json')
+        
+        # Use read_config function from checkpoint_utils
+        hyperparams = checkpoint.read_config(config_path)
     except Exception as e:
-        print(f"Error extracting hyperparameters from directory: {e}")
-        return
+        print(f"Error loading config: {e}")
+        hyperparams = {}
 
     file_path = os.path.join(dir_path, 'accuracy_logs.json')
     log_data = extract_log_data(file_path, ['training_accuracy', 'validation_accuracy', 'test_accuracy'])
@@ -140,24 +145,29 @@ def accuracy_plotter(dir_path: str, hyperparams_typedict: dict, show_hyperparams
     plt.show()
 
 
-def loss_plotter(dir_path: str, hyperparams_typedict: dict, show_hyperparams: bool = True) -> None:
+def loss_plotter(dir_path: str, config_path: str = None, show_hyperparams: bool = True) -> None:
     """
     Plots training and validation loss from a JSON log file.
     If test loss is present, plots it as well. If only one test loss is present (best model), shows it as a horizontal line.
 
     Args:
-        dir_path (str): Path to the directory containing the JSON log and model config.
-        hyperparams_typedict (dict): Dictionary mapping hyperparameter names to types. Must be provided by the user.
+        dir_path (str): Path to the directory containing the JSON log files.
+        config_path (str, optional): Path to the config file. If None, will look for config.json in dir_path.
         show_hyperparams (bool): If True, displays model hyperparameters as figtext on the plot.
 
     Saves:
         A plot 'loss_plot.jpg' in the same directory.
     """
     try:
-        hyperparams = checkpoint.deconstruct_dir_to_hyperparams(dir_path, hyperparams_typedict)
+        # If config_path is not provided, look for config.json in dir_path
+        if config_path is None:
+            config_path = os.path.join(dir_path, 'config.json')
+        
+        # Use read_config function from checkpoint_utils
+        hyperparams = checkpoint.read_config(config_path)
     except Exception as e:
-        print(f"Error extracting hyperparameters from directory: {e}")
-        return
+        print(f"Error loading config: {e}")
+        hyperparams = {}
 
     file_path = os.path.join(dir_path, 'loss_logs.json')
     log_data = extract_log_data(file_path, ['training_loss', 'validation_loss', 'test_loss'])
