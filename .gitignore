@@ -4,6 +4,10 @@
 # Old source code
 oldconfigs/
 
+# Training Checkpoints
+MNIST/Training Checkpoints/
+HAM10000/Training Checkpoints/
+
 # Python
 __pycache__/
 *.py[cod]
