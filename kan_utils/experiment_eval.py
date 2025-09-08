@@ -29,6 +29,7 @@ Example Usage:
 
 This module works in conjunction with the checkpoint_utils and general_utils modules
 to provide a comprehensive experiment management and evaluation framework for RBF-KANs.
+
 """
 
 import os
@@ -36,7 +37,7 @@ import json
 import pandas as pd
 import torch
 from itertools import product
-from torchsummary import summary
+from torchinfo import summary
 from typing import Dict
 
 # Local imports
