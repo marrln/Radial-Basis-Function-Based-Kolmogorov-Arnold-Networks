@@ -19,18 +19,29 @@ Functions:
     Highlights the epoch with the lowest validation loss. If only a single test loss is present, displays it as a horizontal line. 
     Optionally annotates the plot with model hyperparameters.
 
+- plot_confusion_matrix(y_test, y_pred, class_names, title=None, normalize=False, cmap=None):
+    Plots a confusion matrix and a classification report as heatmaps.
+    Supports normalization and custom colormap selection.
+    Displays metrics per class and overall confusion matrix.
+
 Notes:
-----------
-1. Ensure your training/validation logs are saved as JSON files ('accuracy_logs.json' and 'loss_logs.json') in the target directory.
-2. Call `accuracy_plotter(dir_path)` or `loss_plotter(dir_path)` with the directory path containing the logs and configuration.
-3. The plots will be saved as 'accuracy_plot.jpg' and 'loss_plot.jpg' in the same directory and displayed interactively.
+------
+1. Ensure your logs are saved as JSON files ('accuracy_logs.json' and 'loss_logs.json') in the target directory.
+2. Call `accuracy_plotter(dir_path)` or `loss_plotter(dir_path)` with the directory containing the logs and config.
+3. Plots are saved as 'accuracy_plot.jpg' and 'loss_plot.jpg' in the same directory and displayed interactively.
+4. For confusion matrix plotting, provide true and predicted labels along with class names.
 
 TODO: If the hyperparameters are too many, the figtext may overflow outside the figure. Implement a better way to handle this.
 """
 
+from calendar import c
 import os
 import json
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, confusion_matrix
 
 # Local imports
 from . import checkpoint_utils as checkpoint
@@ -214,4 +225,56 @@ def loss_plotter(dir_path: str, config_path: str = None, show_hyperparams: bool 
     plt.legend()
     plt.grid(True)
     plt.savefig(os.path.join(dir_path, f'loss_plot.jpg'))
+    plt.show()
+
+def plot_confusion_matrix(y_test, y_pred, class_names, title=None, normalize=False, cmap=None, cbar=True):
+    """
+    Plots a confusion matrix and classification report.
+    Args:
+        y_test: Ground truth labels.
+        y_pred: Predicted labels.
+        class_names: List of class names.
+        title: Optional plot title.
+        normalize: If True, normalize confusion matrix rows.
+        cmap: Colormap for confusion matrix.
+        cbar: If True, display color bar.
+    """
+    # Confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+    cmap = cmap if cmap is not None else 'Blues' 
+
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1, keepdims=True)
+        cm = np.nan_to_num(cm)  # Replace NaN with 0 for rows with sum 0
+
+    # Create subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+    fig.suptitle(title if title is not None else "", fontsize=16, fontweight='bold')
+
+    # Subplot 1: Classification report
+    report = classification_report(y_test, y_pred, target_names=class_names, output_dict=True)
+    report_df = pd.DataFrame(report)
+    # Exclude 'accuracy' and 'macro avg' from the classification report DataFrame
+    report_df = report_df.drop(columns=['accuracy'], errors='ignore')
+    report_df = report_df.drop(columns=['macro avg'], axis=1, errors='ignore')
+
+    sns.heatmap(report_df.iloc[:-1, :-1], annot=True, cmap=cmap, fmt=".2f", cbar=cbar, ax=ax1)
+    ax1.set_title("Metrics per Class")
+
+    # Subplot 2: Confusion matrix
+    fmt = '.2f' if normalize else 'd'
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt=fmt,
+        cmap=cmap,
+        xticklabels=class_names,
+        yticklabels=class_names,
+        cbar=cbar,
+        ax=ax2
+    )
+    ax2.set_title("Confusion Matrix" + (" (Normalized)" if normalize else ""))
+
+    # Final layout
+    plt.tight_layout() 
     plt.show()
