@@ -54,9 +54,10 @@ from sklearn.metrics import confusion_matrix, f1_score, recall_score
 from typing import Dict, List, Tuple, Union, Optional, Any
 
 # Local imports
-import checkpoint_utils as checkpoint
-import fasterkan
-import mapper
+from . import checkpoint_utils as checkpoint
+from . import experiment_eval as exeval
+from . import fasterkan
+from . import mapper
 
 # Settings
 SAVE_METRICS_IN_TXT = True
@@ -91,7 +92,7 @@ def initialize_kan_model_from_config(config_path: str, device: str = 'cpu') -> t
         inv_denominator=config['inv_denominator']
     ).to(device)
 
-    file_path = checkpoint.save_attributes(
+    file_path = exeval.save_attributes(
         model=model,
         root_dir=CHECKPOINT_DIRECTORY,
         config=config
@@ -211,7 +212,8 @@ def validate_model(
     checkpoint_path: Optional[str] = None, 
     optimizer: Optional[torch.optim.Optimizer] = None, 
     device: str = 'cpu', 
-    metrics_flag: bool = False
+    metrics_flag: bool = False,
+    use_one_hot: bool = False
 ) -> Tuple[Optional[float], Optional[float]]:
     """
     Validate a model on a given validation dataset.
@@ -224,6 +226,7 @@ def validate_model(
         optimizer (Optional[torch.optim.Optimizer]): Optimizer to load the state into if checkpoint_path is provided. Defaults to None.
         device (str): The device to use ('cpu' or 'cuda'). Defaults to 'cpu'.
         metrics_flag (bool): Flag to compute and save additional metrics during validation. Defaults to False.
+        use_one_hot (bool): Whether to use one-hot encoding for targets. Defaults to False.
 
     Returns:
         Tuple[Optional[float], Optional[float]]: Tuple containing:
@@ -272,10 +275,13 @@ def validate_model(
         model.eval()
 
     if isinstance(criterion, str):
-        criterion = re.sub(r"\(.*\)", "", criterion)
-        criterion = mapper.get_criterion(criterion, {})
+        criterion_name = re.match(r'^([^(]+)', criterion).group(1).strip()
+        criterion_name = criterion_name.split('.')[-1] 
+        criterion = mapper.get_criterion(criterion_name, {})
 
     val_loss = 0.0
+    correct_predictions = 0
+    total_samples = 0
     all_preds = []
     all_targets = []
 
@@ -284,21 +290,33 @@ def validate_model(
             data, target = data.to(device), target.to(device)
             output = model(data)
             
-            all_preds.extend(output.cpu())
-            all_targets.extend(target.cpu())
+            # Calculate loss for this batch
+            if use_one_hot:
+                targets = torch.nn.functional.one_hot(target, output.size(-1)).to(output.dtype)
+                batch_loss = criterion(output, targets).item()
+            else:
+                batch_loss = criterion(output, target).item()
+                
+            val_loss += batch_loss * data.size(0)  # Weighted by batch size
             
-        all_preds = torch.stack(all_preds).to(device)
-        all_targets = torch.stack(all_targets).to(device)
-        
-        val_loss = criterion(all_preds, torch.nn.functional.one_hot(all_targets,all_preds.size(-1)).to(all_preds.dtype)).cpu().item()
-        
-        _, all_preds = torch.max(all_preds, dim=-1)
-        val_accuracy = 100 * (all_preds == all_targets).sum().item() / len(all_targets)
-        
-    all_preds = all_preds.cpu()
-    all_targets = all_targets.cpu()
+            # Calculate accuracy
+            _, predicted = torch.max(output, 1)
+            correct_predictions += (predicted == target).sum().item()
+            total_samples += data.size(0)
+            
+            # Store predictions and targets for metrics calculation
+            if metrics_flag:
+                all_preds.extend(predicted.cpu())
+                all_targets.extend(target.cpu())
+    
+    # Calculate average loss and accuracy
+    val_loss = val_loss / total_samples
+    val_accuracy = 100 * correct_predictions / total_samples
 
-    if metrics_flag:
+    # Compute additional metrics if requested
+    if metrics_flag and all_preds and all_targets:
+        all_preds = torch.tensor(all_preds)
+        all_targets = torch.tensor(all_targets)
         compute_and_serialize_metrics(all_targets, all_preds, val_accuracy, checkpoint_path=checkpoint_path, save_txt=SAVE_METRICS_IN_TXT)
 
     return val_loss, val_accuracy
@@ -315,8 +333,14 @@ def train_and_validate_model(
     checkpoint_dir: str, 
     epochs: int = 30, 
     start_epoch: int = 0, 
-    patience: Optional[int] = None
-) -> None:
+    patience: Optional[int] = None,
+    learning_rate: float = 0.001,
+    early_stopping: bool = False,
+    scheduler_params: Optional[Dict[str, Any]] = None,
+    save_every: Optional[int] = None,
+    use_one_hot: bool = False
+) -> Dict[str, List[float]]:
+
     """
     Train and validate a PyTorch model for a specified number of epochs, saving checkpoints and logs.
 
@@ -334,9 +358,14 @@ def train_and_validate_model(
         start_epoch (int): Starting epoch (useful for resuming training). Defaults to 0.
         patience (Optional[int]): Number of epochs with no improvement after which training will be stopped.
             Defaults to None (no early stopping).
+        learning_rate (float): Learning rate for the optimizer when created from string. Defaults to 0.001.
+        early_stopping (bool): Flag to enable early stopping. Defaults to False.
+        scheduler_params (Optional[Dict[str, Any]]): Parameters for the scheduler when created from string.
+        save_every (Optional[int]): If provided, save model checkpoint every this many epochs. Defaults to None.
+        use_one_hot (bool): Whether to use one-hot encoding for targets in loss calculation. Defaults to False.
 
     Returns:
-        None
+        Dict[str, List[float]]: Dictionary containing training and validation metrics per epoch.
     
     Notes:
         - If criterion, optimizer, or scheduler are provided as strings, they will be converted to 
@@ -348,24 +377,34 @@ def train_and_validate_model(
     """
     # Convert criterion from string to nn.Module if needed
     if isinstance(criterion, str):
-        criterion = re.sub(r"\(.*\)", "", criterion)
-        criterion = mapper.get_criterion(criterion, {})
+        criterion_name = re.match(r'^([^(]+)', criterion).group(1).strip()
+        criterion_name = criterion_name.split('.')[-1]  
+        criterion = mapper.get_criterion(criterion_name, {})
 
     # Convert optimizer from string to torch.optim.Optimizer if needed
     if isinstance(optimizer, str):
-        optimizer = re.sub(r"\(.*\)", "", optimizer)
-        optimizer = mapper.get_optimizer(optimizer, model.parameters(), {})
+        optimizer_name = re.match(r'^([^(]+)', optimizer).group(1).strip()
+        optimizer_name = optimizer_name.split('.')[-1]
+        optimizer_args = {"lr": learning_rate}
+        optimizer = mapper.get_optimizer(optimizer_name, model.parameters(), optimizer_args)
 
     # Convert scheduler from string to torch.optim.lr_scheduler.LRScheduler if needed
     if isinstance(scheduler, str):
-        scheduler = re.sub(r"\(.*\)", "", scheduler)
-        scheduler = mapper.get_scheduler(scheduler, optimizer, {})
+        scheduler_name = re.match(r'^([^(]+)', scheduler).group(1).strip()
+        scheduler_name = scheduler_name.split('.')[-1]
+        scheduler_args = scheduler_params or {}
+        scheduler = mapper.get_scheduler(scheduler_name, optimizer, scheduler_args)
 
     # Create directory for current epoch's checkpoint using checkpoint API
     last_dir = os.path.join(checkpoint_dir, 'last')
     best_dir = os.path.join(checkpoint_dir, 'best')
     os.makedirs(last_dir, exist_ok=True)
     os.makedirs(best_dir, exist_ok=True)
+    
+    # Create periodic checkpoint directory if save_every is specified
+    if save_every is not None:
+        periodic_dir = os.path.join(checkpoint_dir, 'periodic')
+        os.makedirs(periodic_dir, exist_ok=True)
     
     best_loss = float('inf')
     count_epochs = 0
@@ -387,7 +426,11 @@ def train_and_validate_model(
                 optimizer.zero_grad()
 
                 output = model(data)
-                loss = criterion(output, torch.nn.functional.one_hot(target,output.size(-1)).to(output.dtype))
+                if use_one_hot:
+                    targets = torch.nn.functional.one_hot(target, output.size(-1)).to(output.dtype)
+                    loss = criterion(output, targets)
+                else:
+                    loss = criterion(output, target)
 
                 loss.backward()
                 optimizer.step()
@@ -410,25 +453,82 @@ def train_and_validate_model(
         epoch_accuracy = 100 * correct_predictions / total_samples
         print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
 
-        val_loss, val_accuracy = validate_model(model=model, val_loader=val_loader, criterion=criterion, checkpoint_path=None, device=device); 
+        # Validate with metrics if in the last epoch or at specific intervals
+        metrics_flag = (epoch == epochs - 1)  # Enable metrics in last epoch
+        val_loss, val_accuracy = validate_model(
+            model=model, 
+            val_loader=val_loader, 
+            criterion=criterion, 
+            checkpoint_path=None, 
+            device=device,
+            metrics_flag=metrics_flag,
+            use_one_hot=use_one_hot
+        )
         print(f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_accuracy:.2f}%")
 
+        # Save last checkpoint
         checkpoint.save_model_checkpoint(epoch_dir=last_dir, model=model, optimizer=optimizer, epoch=epoch, loss=epoch_loss)
-        if (val_loss < best_loss):
+        
+        # Save periodic checkpoint if requested
+        if save_every is not None and (epoch + 1) % save_every == 0:
+            periodic_epoch_dir = os.path.join(periodic_dir, f'epoch_{epoch + 1}')
+            os.makedirs(periodic_epoch_dir, exist_ok=True)
+            checkpoint.save_model_checkpoint(epoch_dir=periodic_epoch_dir, model=model, optimizer=optimizer, epoch=epoch, loss=epoch_loss)
+        
+        # Handle best model saving and early stopping
+        if val_loss < best_loss:
             best_loss = val_loss
-            checkpoint.save_model_checkpoint(epoch_dir=best_dir, model=model, optimizer=optimizer, epoch=epoch, loss=epoch_loss)
+            checkpoint.save_model_checkpoint(epoch_dir=best_dir, model=model, optimizer=optimizer, epoch=epoch, loss=val_loss)
             count_epochs = 0
-        elif patience is not None:
+        else:
             count_epochs += 1
             
-        if patience is not None and count_epochs >= patience:
-            print(f"Early stopping at epoch {epoch + 1} with patience {patience}. No improvement in validation loss for {count_epochs} epochs.")
+        # Apply early stopping if enabled and patience is exceeded
+        if (early_stopping or patience is not None) and count_epochs >= (patience or 5):
+            print(f"Early stopping at epoch {epoch + 1}. No improvement in validation loss for {count_epochs} epochs.")
             break
         
+        # Update learning rate scheduler
         if scheduler is not None:
-            scheduler.step(val_loss)
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(val_loss)
+            else:
+                scheduler.step()
         
+        # Log metrics
         update_logs(log_file=os.path.join(checkpoint_dir, "loss_logs.json"), epoch=epoch + 1, training_metric=epoch_loss, validation_metric=val_loss, metric_name="loss")
         update_logs(log_file=os.path.join(checkpoint_dir, "accuracy_logs.json"), epoch=epoch + 1, training_metric=epoch_accuracy, validation_metric=val_accuracy, metric_name="accuracy")
+    
+    # Return collected metrics
+    metrics = {
+        "train_loss": [],
+        "val_loss": [],
+        "train_accuracy": [],
+        "val_accuracy": []
+    }
+
+    # Populate metrics from log files if they exist
+    loss_log_path = os.path.join(checkpoint_dir, "loss_logs.json")
+    acc_log_path = os.path.join(checkpoint_dir, "accuracy_logs.json")
+    
+    if os.path.exists(loss_log_path):
+        with open(loss_log_path, "r") as f:
+            loss_logs = json.load(f)
+            for entry in loss_logs:
+                if "training_loss" in entry:
+                    metrics["train_loss"].append(entry["training_loss"])
+                if "validation_loss" in entry:
+                    metrics["val_loss"].append(entry["validation_loss"])
+    
+    if os.path.exists(acc_log_path):
+        with open(acc_log_path, "r") as f:
+            acc_logs = json.load(f)
+            for entry in acc_logs:
+                if "training_accuracy" in entry:
+                    metrics["train_accuracy"].append(entry["training_accuracy"])
+                if "validation_accuracy" in entry:
+                    metrics["val_accuracy"].append(entry["validation_accuracy"])
+    
+    return metrics
 
 

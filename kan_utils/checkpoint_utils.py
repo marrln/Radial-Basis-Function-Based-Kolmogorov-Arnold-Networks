@@ -6,7 +6,6 @@ It includes functions for:
 - Creating checkpoint directories based on selected hyperparameters and config hashes.
 - Saving and loading model and optimizer checkpoints.
 - Collecting unique hyperparameter values from checkpoint directories.
-- Saving model attributes and architecture summaries.
 - Processing model data and exporting results to Excel.
 
 Functions:
@@ -16,7 +15,6 @@ Functions:
 - create_epoch_checkpoint_dir():        Create a directory for a specific epoch's checkpoint.
 - save_model_checkpoint():              Save model and optimizer states, along with training metadata.
 - load_model_checkpoint():              Load model and optimizer states from a checkpoint file.
-- save_attributes():                    Save model attributes and architecture summary to a text file.
 
 Example usage:
     checkpoint_dir = get_checkpoint_dir(config, root_dir)
@@ -31,8 +29,8 @@ import hashlib
 from typing import Any, Dict, Optional
 
 # Local imports
-from general_utils import load_json
-import mapper 
+from . general_utils import load_json
+from . import mapper 
 
 # Settings
 REQUIRED_KEYS = [

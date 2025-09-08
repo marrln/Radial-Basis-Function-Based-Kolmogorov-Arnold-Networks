@@ -40,8 +40,8 @@ from torchsummary import summary
 from typing import Dict
 
 # Local imports
-import general_utils as utils
-import checkpoint_utils as checkpoint
+from . import general_utils as utils
+from . import checkpoint_utils as checkpoint
 
 def save_attributes(
     model: torch.nn.Module,

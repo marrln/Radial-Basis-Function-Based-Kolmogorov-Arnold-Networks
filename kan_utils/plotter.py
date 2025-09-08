@@ -33,7 +33,7 @@ import json
 import matplotlib.pyplot as plt
 
 # Local imports
-import checkpoint_utils as checkpoint
+from . import checkpoint_utils as checkpoint
 
 # GLOBAL CONSTANTS FOR AESTHETICS
 MARKER_SIZE, MARKER_TYPE = 3, 'o'                                                                      # Marker size and type for accuracy/loss curves
