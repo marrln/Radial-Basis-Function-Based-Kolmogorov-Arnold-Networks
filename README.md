@@ -1,17 +1,17 @@
-# Radial Basis Function-Based Kolmogorov-Arnold Networks (RBF-KAN)
+# Radial Basis Function-based Kolmogorov-Arnold Networks (RBF-KAN)
 
-This repository implements Radial Basis Function-Based Kolmogorov-Arnold Networks (RBF-KAN), a neural network architecture based on the Kolmogorov-Arnold representation theorem. The implementation (called FasterKAN) includes specific optimizations for both training and potential hardware acceleration.
+This repository implements Radial Basis Function (RBF)-based Kolmogorov-Arnold Networks (KAN), a neural network architecture based on the Kolmogorov-Arnold representation theorem. The design (called [FasterKAN](https://github.com/AthanasiosDelis/faster-kan)) includes specific optimizations for both training and potential hardware acceleration.
 
-This implementation is specialized for image classification tasks, with examples on handwritten digit recognition (MNIST) and medical image classification (HAM10000 skin lesions). It is based on the original [FasterKAN by Athanasios Delis](https://github.com/AthanasiosDelis/faster-kan) with several key modifications for improved performance and hardware deployability.
+This repository focuses on image classification, with examples on handwritten digit recognition (MNIST) and medical image classification (HAM10000 skin lesions). It is based on the original [FasterKAN](https://github.com/AthanasiosDelis/faster-kan) with several key modifications for improved performance and hardware deployability.
 
 ## Overview
 
-Kolmogorov-Arnold Networks (KANs) are neural networks inspired by the Kolmogorov-Arnold representation theorem, which states that any multivariate continuous function can be represented as a composition of continuous functions of a single variable and addition operations. RBF-KANs use radial basis functions as the inner univariate functions, providing a flexible framework for function approximation.
+KANs are neural networks inspired by the Kolmogorov-Arnold representation theorem, which states that any multivariate continuous function can be represented as a composition of continuous functions of a single variable and addition operations. RBF-KANs use radial basis functions as the inner univariate functions, providing a flexible framework for function approximation.
 
 While originally conceived for general function approximation, our implementation focuses specifically on image classification tasks. The architecture processes flattened image data and has been optimized for classification performance on image datasets.
 
 This implementation includes:
-- Core RBF-KAN architecture (implemented as FasterKAN)
+- Core RBF-KAN architecture (based on [FasterKAN](https://github.com/AthanasiosDelis/faster-kan))
 - Quantization support for deployment on resource-constrained devices
 - Example applications for MNIST digit classification and HAM10000 skin lesion classification
 
@@ -25,15 +25,15 @@ This implementation includes:
 - **Quantization Support**: Tools for post-training quantization
 - **Image Classification Examples**: Ready-to-use examples on standard image datasets (MNIST, HAM10000)
 
-## Differences from Original FasterKAN
+## Differences from FasterKAN
 
 Our implementation includes several key modifications to the original [FasterKAN](https://github.com/AthanasiosDelis/faster-kan):
 
-1. **Dropout Implementation**: Added dropout layers with rates that scale with the number of grid points to improve generalization, especially for models with larger grid sizes.
+1. **Dropout Layers**: Added dropout layers with rates that scale with the number of grid points to improve generalization, especially for models with larger grid sizes.
    
-2. **Hardware-Friendly Architecture**: Implemented an option to use linear layers without bias terms, making the model more suitable for FPGA implementation.
+2. **Hardware-Friendly Architecture**: Optional bias term on linear layers, making the model more suitable for acceleration on FPGA devices.
 
-3. **Modified Backward Pass**: Enhanced the backward pass with gradient boosting for grid and inverse denominator parameters, making their updates more significant during training.
+3. **Modified Backward Pass**: Enhanced the backward pass with gradient boosting for grid and inverse denominator parameters for improved training effort and enhanced metrics performance.
 
 4. **Quantization Support**: Added comprehensive tools for model quantization to support deployment on resource-constrained devices.
 
@@ -98,11 +98,13 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## References
-
-Pending...
-
 ## Acknowledgments
 
-- The theoretical foundations of the Kolmogorov-Arnold representation theorem
-- The HAM10000 dataset by Tschandl et al.
+This research is part of the [kan-fpga](https://github.com/gvenit/kan-fpga.git) project, an open-source soft IP core for RBF-KAN acceleration on SoC devices.
+
+## References
+
+- [1] Liu, Z.; Wang, Y.; Vaidya, S.; Ruehle, F.; Halverson, J.; Soljaˇci´c, M.; Hou, T.Y.; Tegmark, M. KAN: Kolmogorov-Arnold Networks 2024. [[arXiv:cs.LG/2404.19756](http://arxiv.org/abs/2404.19756)].
+- [2] Li, Z. Kolmogorov-Arnold Networks are Radial Basis Function Networks 2024. [[arXiv:cs.LG/2405.06721](http://arxiv.org/abs/2405.06721)]. 
+- [3] Delis, A. FasterKAN. https://github.com/AthanasiosDelis/faster-kan/, 2024.
+- [4] Tschandl, P.; Rosendahl, C.; Kittler, H. The HAM10000 dataset, a large collection of multi-source dermatoscopic images of common pigmented skin lesions. Sci. Data 2018, 5, 180161. DOI : [10.1038/sdata.2018.161](https://doi.org/10.1038/sdata.2018.161).
