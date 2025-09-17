@@ -181,11 +181,11 @@ def load_model_checkpoint(
     optimizer_params: dict = None
 ) -> tuple[torch.nn.Module, Optional[torch.optim.Optimizer], int, float, Optional[float]]:
     """
-    Load the checkpoint for a model and optionally an optimizer.
+    Load the checkpoint for a model and optionally an optimizer if you want to continue the training.
     """
     if os.path.exists(model_path):
-        checkpoint = torch.load(model_path, map_location=device)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        checkpoint = torch.load(model_path, map_location=device, weights_only = True)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
         model.to(device)
         optimizer: Optional[torch.optim.Optimizer] = None
         if optimizer_type:

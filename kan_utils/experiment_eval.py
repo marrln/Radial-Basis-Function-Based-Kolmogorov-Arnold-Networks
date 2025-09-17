@@ -141,7 +141,7 @@ def collect_unique_hyperparams_from_dirs(root_dir: str) -> Dict[str, list]:
     return result
 
 
-def process_model_data( root_dir: str, config: dict) -> None:
+def process_model_data(root_dir: str, config: dict) -> None:
     """
     Processes model data from directories, extracts relevant information, and saves it to an Excel file.
     Args:

@@ -3,10 +3,20 @@
 
 # Old source code
 oldconfigs/
+quant_utils/
+
+
+# Data directories
+data/
+MNIST/data/
+HAM10000/data/
 
 # Training Checkpoints
 MNIST/Training Checkpoints/
+MNIST/Custom-Quantizer/
 HAM10000/Training Checkpoints/
+MNIST/Custom-Quantizer/
+
 
 # Python
 __pycache__/
