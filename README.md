@@ -47,6 +47,7 @@ Our implementation includes several key modifications to the original [FasterKAN
   - `experiment_eval.py`: Tools for experiment analysis and hyperparameter management
   - `plotter.py`: Visualization utilities for training metrics and model evaluation
   - `general_utils.py`: Common utility functions shared across the codebase
+  - `quant_fasterkan.py`: Custom quantization implementation of the float model `fasterkan.py` and helpful functions for quantization
 
 - **`MNIST/`**: MNIST dataset experiments
   - `mnist_kan_training.ipynb`: Complete training pipeline notebook for MNIST classification
