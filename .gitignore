@@ -7,6 +7,7 @@ oldconfigs/
 # Training Checkpoints
 MNIST/Training Checkpoints/
 HAM10000/Training Checkpoints/
+Dataset/
 
 # Python
 __pycache__/
