@@ -24,15 +24,18 @@ def weight_transformer(
 
     return concat_rows
 
-def save_tensor_to_bin(tensor, fname):
+def save_tensor_to_bin(tensor, fname, verbose = True):
     np_array = np.asarray(tensor)
+    np_array = np_array.astype(np_array.dtype.newbyteorder('<'))
     with open(fname, 'wb') as f:
         f.write(np_array.tobytes()) # default is 'C' order (row-major)
-    print(f"Saved tensor to {fname}")
+        
+    if verbose:
+        print(f"Saved tensor to {fname}")
 
 def save_weights_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     """
-    Saves transformed linear layer weights to binary files.
+    Saves transformed linear layer weights to binary files (little endian).
     
     Args:
         state_dict: Model's state dictionary.
@@ -92,7 +95,7 @@ def extract_fx_packed_params(state_dict):
 
 def save_fx_weights_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     """
-    Saves transformed linear layer weights to binary files.
+    Saves transformed linear layer weights to binary files (little endian).
     
     Args:
         state_dict: Model's state dictionary.
@@ -108,7 +111,7 @@ def extract_custom_params(state_dict,parameter = 'weight'):
 
 def save_custom_weights_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     """
-    Saves transformed linear layer weights to binary files.
+    Saves transformed linear layer weights to binary files (little endian).
     
     Args:
         state_dict: Model's state dictionary.
@@ -120,7 +123,7 @@ def save_custom_weights_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
 
 def save_custom_model_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     """
-    Saves transformed linear layer weights to binary files.
+    Saves transformed linear layer weights to binary files (little endian).
     
     Args:
         state_dict: Model's state dictionary.
@@ -136,6 +139,16 @@ def save_custom_model_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     for key, val in params.items():
         save_tensor_to_bin(val, os.path.join(param_dir, f'{key.replace('.','_')}.bin'))
         
+def cumulate_files(filenames, src_dir, dest_fname, key):
+    fnames = list(filter(lambda a: key in a, filenames))
+    if len(fnames):
+        with open(dest_fname, 'wb') as fw:
+            for fname in fnames:
+                with open(os.path.join(src_dir,fname), 'rb') as fr:
+                    fw.write(fr.read())
+
+        print(f"Packetized {key} to '{dest_fname}'")
+    
 def packetize_model_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     save_custom_model_to_bin(state_dict, root_dir, RSLT_CHANNELS)
     
@@ -146,23 +159,16 @@ def packetize_model_to_bin(state_dict, root_dir, RSLT_CHANNELS = 1):
     
     for dirpath, dirnames, filenames in os.walk(param_dir):
         for key in ['weight','grid','inv_denom']:
-            fnames = list(filter(lambda a: key in a, filenames))
-            
+    
             cumulative_fname = dirpath.replace(param_dir,'')
             cumulative_fname = f'{cumulative_fname}_{key}.bin' if len(cumulative_fname) else f'{key}.bin'
             cumulative_fname = os.path.join(pckt_dir, cumulative_fname)
             
-            if len(fnames):
-                with open(cumulative_fname, 'wb') as fw:
-                    for fname in fnames:
-                        with open(os.path.join(dirpath,fname), 'rb') as fr:
-                            fw.write(fr.read())
-
-                print(f"Packetized {key} to '{cumulative_fname}'")
+            cumulate_files(filenames, dirpath, cumulative_fname, key)
             
 if __name__ == "__main__":
-    model_pth = '../Dataset/Custom-Quantizer/16_bits/45482/BCELoss/Adam/ReduceOnPlateau/3.0e-05/[12288,1024,7]/[4]/-2.0e+00/2.5e-01/2.0e+00/epoch_best/model_checkpoint.pth'
-    # model_pth = '../Dataset/Custom-Quantizer/mixed_16_bits/45482/BCELoss/Adam/ReduceOnPlateau/3.0e-05/[12288,1024,7]/[4]/-2.0e+00/2.5e-01/2.0e+00/epoch_best/model_checkpoint.pth'
+    # model_pth = '../Dataset/Custom-Quantizer/16_bits/45482/BCELoss/Adam/ReduceOnPlateau/3.0e-05/[12288,1024,7]/[4]/-2.0e+00/2.5e-01/2.0e+00/epoch_best/model_checkpoint.pth'
+    model_pth = '../Dataset/Custom-Quantizer/mixed_16_bits/45482/BCELoss/Adam/ReduceOnPlateau/3.0e-05/[12288,1024,7]/[4]/-2.0e+00/2.5e-01/2.0e+00/epoch_best/model_checkpoint.pth'
     
     os.chdir(os.path.dirname(__file__))
     if os.path.exists(model_pth):
