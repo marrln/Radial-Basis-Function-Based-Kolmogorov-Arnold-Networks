@@ -25,6 +25,12 @@ df = pd.read_csv(csv_path)
 image_dir = os.path.join(dataset_path, "HAM10000_images")
 image_bin_dir = os.path.join(dataset_path, "HAM10000_images_bin")
 cumulative_fname = image_dir + '_cumulate.bin'
+rslt_fname = image_dir + '_cumulate_labels.csv'
+
+target_dtype = 'int16'
+fractal_bits = 11
+
+dtype = getattr(torch, target_dtype)
 
 os.makedirs(image_bin_dir, exist_ok=True)
 
@@ -135,11 +141,34 @@ _, _, test_dataset = random_split(full_dataset, splits)
 pbar = tqdm(iter(test_dataset))
 
 # Save images to binary
-for img, _, img_name in pbar:
+check=False
+label_dict = {'Image' : [], 'Label' : []}
+for img, label, img_name in pbar:
     
-    img = img.cpu().to(torch.int16)
+    img2 = (img * 2**fractal_bits).cpu().to(dtype)
     fname = os.path.join(image_bin_dir, img_name)
+    if not check:
+        assert (np.frombuffer(np.asarray(img2).tobytes(), dtype=target_dtype) == np.frombuffer(np.asarray(torch.nn.Flatten(0)(img2)).tobytes(), dtype=target_dtype)).all()
+        check = True
     
-    save_tensor_to_bin(img, os.path.splitext(fname)[0] + '.bin', verbose = False)
+    # save_tensor_to_bin(img2, os.path.splitext(fname)[0] + '.bin', verbose = False)
     
-cumulate_files(os.listdir(image_bin_dir), image_bin_dir, cumulative_fname, 'ISIC')
+    label_dict['Image'].append(os.path.splitext(img_name)[0])
+    label_dict['Label'].append(label)
+    
+rslt_df = pd.DataFrame(label_dict)
+    
+img_list = os.listdir(image_bin_dir)
+rslt_df = rslt_df.set_index('Image')
+# cumulate_files(img_list, image_bin_dir, cumulative_fname, 'ISIC')
+
+offset_df = pd.DataFrame({
+    'Image' : [os.path.splitext(img_name)[0] for img_name in os.listdir(image_bin_dir)],
+    'Offset' : range(len(img_list))
+}).set_index('Image')
+
+rslt_df = pd.concat([rslt_df, offset_df], axis=1)
+print(rslt_df)
+rslt_df = rslt_df.reset_index().set_index('Offset').sort_index()
+print(rslt_df)
+rslt_df.to_csv(rslt_fname)
