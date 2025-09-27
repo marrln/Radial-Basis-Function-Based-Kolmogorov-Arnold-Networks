@@ -24,7 +24,6 @@ default_frac_bits = {
     'result' : 4,
 }
 
-
 def extract_range(tensor: torch.Tensor, bit_width: int, unsigned: bool = False) -> int:
     """
     Calculates the number of bits available for quantization based on the maximum absolute value in the input tensor.
